@@ -360,26 +360,35 @@ with tab3:
         st.subheader("Keystroke Timing Analysis")
         
         # Create interactive visualizations with plotly
-        fig = px.scatter(st.session_state.training_data, x="KeyCode", y="TimeDiff", 
-                         title="Keystroke Timing Patterns",
-                         labels={"KeyCode": "Key Code (ASCII)", "TimeDiff": "Time Difference (s)"},
-                         color="TimeDiff", size="TimeDiff")
-        st.plotly_chart(fig)
+        try:
+            fig = px.scatter(st.session_state.training_data, x="KeyCode", y="TimeDiff", 
+                            title="Keystroke Timing Patterns",
+                            labels={"KeyCode": "Key Code (ASCII)", "TimeDiff": "Time Difference (s)"},
+                            color="TimeDiff", size="TimeDiff")
+            st.plotly_chart(fig)
+        except Exception as e:
+            st.error(f"Error creating scatter plot: {e}")
         
         # Distribution of time differences
-        fig = px.histogram(st.session_state.training_data, x="TimeDiff", 
-                           title="Distribution of Time Differences Between Keystrokes",
-                           labels={"TimeDiff": "Time Difference (seconds)"},
-                           nbins=20)
-        st.plotly_chart(fig)
+        try:
+            fig = px.histogram(st.session_state.training_data, x="TimeDiff", 
+                            title="Distribution of Time Differences Between Keystrokes",
+                            labels={"TimeDiff": "Time Difference (seconds)"},
+                            nbins=20)
+            st.plotly_chart(fig)
+        except Exception as e:
+            st.error(f"Error creating histogram: {e}")
         
         # Heatmap using matplotlib
         st.subheader("Keystroke Data Correlation Heatmap")
         
         # Create correlation matrix and heatmap
         if len(st.session_state.training_data.columns) >= 2:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            corr_matrix = st.session_state.training_data[["KeyCode", "TimeDiff"]].corr()
-            sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", ax=ax)
-            ax.set_title("Keystroke Data Correlation Heatmap")
-            st.pyplot(fig)
+            try:
+                fig, ax = plt.subplots(figsize=(8, 6))
+                corr_matrix = st.session_state.training_data[["KeyCode", "TimeDiff"]].corr()
+                sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", ax=ax)
+                ax.set_title("Keystroke Data Correlation Heatmap")
+                st.pyplot(fig)
+            except Exception as e:
+                st.error(f"Error creating heatmap: {e}")
