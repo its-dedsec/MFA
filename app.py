@@ -14,26 +14,32 @@ import os  # Import the os module
 st.set_page_config(page_title="Keystroke Dynamics-Based MFA", layout="wide")
 
 # Initialize session state variables
-if "sample_count" not in st.session_state:
-    st.session_state.sample_count = 0
-if "key_press_times" not in st.session_state:
-    st.session_state.key_press_times = {}
-if "training_data" not in st.session_state:
-    st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
-if "trained" not in st.session_state:
-    st.session_state.trained = False
-if "reference_password" not in st.session_state:
-    st.session_state.reference_password = "password123"
-if "samples" not in st.session_state:
-    st.session_state.samples = []
-if "input_method" not in st.session_state:  # Added to track input method
-    st.session_state.input_method = "primary"
-if "password_input_main" not in st.session_state:  # Add this
-    st.session_state.password_input_main = ""
-if "verify_password_main" not in st.session_state: # Add this
-    st.session_state.verify_password_main = ""
-if "feedback" not in st.session_state:
-    st.session_state.feedback = ""
+def initialize_session_state():
+    """Initializes all session state variables."""
+    if "sample_count" not in st.session_state:
+        st.session_state.sample_count = 0
+    if "key_press_times" not in st.session_state:
+        st.session_state.key_press_times = {}
+    if "training_data" not in st.session_state:
+        st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
+    if "trained" not in st.session_state:
+        st.session_state.trained = False
+    if "reference_password" not in st.session_state:
+        st.session_state.reference_password = "password123"
+    if "samples" not in st.session_state:
+        st.session_state.samples = []
+    if "input_method" not in st.session_state:
+        st.session_state.input_method = "primary"
+    if "password_input_main" not in st.session_state:
+        st.session_state.password_input_main = ""
+    if "verify_password_main" not in st.session_state:
+        st.session_state.verify_password_main = ""
+    if "feedback" not in st.session_state:
+        st.session_state.feedback = ""
+    if "verify_key_times" not in st.session_state:
+        st.session_state.verify_key_times = {}
+
+initialize_session_state()  # Call the function to ensure initialization
 
 # Constants
 DATA_FILE = "keystroke_data.csv"
@@ -57,21 +63,25 @@ except Exception:
 
 # Function to extract features from keystroke timings
 def extract_features(timings, password):
+    """Extracts features (KeyCode, TimeDiff) from keystroke timings."""
     features = []
-    
-    # Convert timings dict to sorted list of (key, time) tuples
-    timing_list = sorted([(k, v) for k, v in timings.items()], key=lambda x: x[1])
-    
-    # Calculate time differences between consecutive keystrokes
-    for i in range(1, len(timing_list)):
-        key_code = ord(password[i])
-        time_diff = timing_list[i][1] - timing_list[i - 1][1]
+    try:
+        # Convert timings dict to sorted list of (key, time) tuples
+        timing_list = sorted([(k, v) for k, v in timings.items()], key=lambda x: x[1])
         
-        features.append({
-            "KeyCode": key_code,
-            "TimeDiff": time_diff,
-            "Password": hashlib.sha256(password.encode()).hexdigest()[:8],
-        })
+        # Calculate time differences between consecutive keystrokes
+        for i in range(1, len(timing_list)):
+            key_code = ord(password[i])
+            time_diff = timing_list[i][1] - timing_list[i - 1][1]
+            
+            features.append({
+                "KeyCode": key_code,
+                "TimeDiff": time_diff,
+                "Password": hashlib.sha256(password.encode()).hexdigest()[:8],
+            })
+    except Exception as e:
+        st.error(f"Error in feature extraction: {e}")
+        return pd.DataFrame()  # Return empty DataFrame in case of error
     
     return pd.DataFrame(features)
 
@@ -103,7 +113,9 @@ with tab1:
         st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
         st.info("Reference password updated. Please collect new samples.")
     
-    st.write(f"Please type the password **{st.session_state.reference_password}** in the text box below and then click the 'Submit Sample' button.")
+    st.write(
+        f"Please type the password **{st.session_state.reference_password}** in the text box below and then click the 'Submit Sample' button."
+    )
     
     # Create columns for input and buttons
     col1, col2 = st.columns([3, 1])
@@ -120,40 +132,47 @@ with tab1:
         if key_index >= 0 and key_index not in st.session_state.key_press_times:
             st.session_state.key_press_times[key_index] = current_time
     
-    # Submit button (outside of any form now)
-    if col2.button("Submit Sample", key="submit_sample_main", use_container_width=True):  # Place button in col2
-        if password_input == st.session_state.reference_password:
-            # Ensure we have enough keystroke data
-            if len(st.session_state.key_press_times) > 1:
-                # Store the sample
-                st.session_state.samples.append({
-                    "password": password_input,
-                    "timings": st.session_state.key_press_times.copy(),
-                })
-                
-                # Extract features
-                features = extract_features(st.session_state.key_press_times, password_input)
-                
-                # Add to training data
-                if not features.empty:
-                    st.session_state.training_data = pd.concat(
-                        [st.session_state.training_data, features], ignore_index=True
+    # Submit button
+    if col2.button("Submit Sample", key="submit_sample_main", use_container_width=True):
+        try:
+            if password_input == st.session_state.reference_password:
+                # Ensure we have enough keystroke data
+                if len(st.session_state.key_press_times) > 1:
+                    # Store the sample
+                    st.session_state.samples.append({
+                        "password": password_input,
+                        "timings": st.session_state.key_press_times.copy(),
+                    })
+                    
+                    # Extract features
+                    features = extract_features(st.session_state.key_press_times, password_input)
+                    
+                    # Add to training data
+                    if not features.empty:
+                        st.session_state.training_data = pd.concat(
+                            [st.session_state.training_data, features], ignore_index=True
+                        )
+                    
+                    # Increment sample count
+                    st.session_state.sample_count += 1
+                    st.session_state.feedback = (
+                        f"Sample {st.session_state.sample_count} captured successfully!"
                     )
-                
-                # Increment sample count
-                st.session_state.sample_count += 1
-                st.session_state.feedback = f"Sample {st.session_state.sample_count} captured successfully!"
-                
-                # Reset timings for next sample
-                st.session_state.key_press_times = {}
-                # Clear input
-                st.session_state.password_input_main = ""
+                    
+                    # Reset timings and input
+                    st.session_state.key_press_times = {}
+                    st.session_state.password_input_main = ""
+                else:
+                    st.session_state.feedback = (
+                        "Not enough keystroke data captured. Please type the password again."
+                    )
             else:
-                st.session_state.feedback = "Not enough keystroke data captured. Please type the password again."
-        else:
-             st.session_state.feedback = "Please type the correct reference password"
-             st.warning("Please type the correct reference password")
-    
+                st.session_state.feedback = "Please type the correct reference password"
+                st.warning("Please type the correct reference password")
+        except Exception as e:
+            st.error(f"Error processing sample: {e}")
+            st.session_state.feedback = "An error occurred. Please try again."
+
     # Display feedback to the user
     st.text(st.session_state.feedback)
     
@@ -206,12 +225,14 @@ with tab2:
     if not st.session_state.trained:
         st.warning("Model not trained yet. Please train the model first.")
     else:
-        st.write(f"Please type the password **{st.session_state.reference_password}** in the text box below and then click the 'Verify User' button.")
+        st.write(
+            f"Please type the password **{st.session_state.reference_password}** in the text box below and then click the 'Verify User' button."
+        )
         
         # Create columns for input and verification
         auth_col1, auth_col2 = st.columns([3, 1])
         
-        # Simplified authentication approach without forms
+        # Simplified authentication approach
         verify_password = auth_col1.text_input("Type password for verification:", key="verify_password_main")
         
         # Capture verification keystroke timings
@@ -221,8 +242,6 @@ with tab2:
             
             # Record key press time
             if verify_key_index >= 0 and verify_key_index not in st.session_state.get("verify_key_times", {}):
-                if "verify_key_times" not in st.session_state:
-                    st.session_state.verify_key_times = {}
                 st.session_state.verify_key_times[verify_key_index] = current_time
         
         # Verify button
@@ -279,10 +298,8 @@ with tab2:
                 else:
                     st.warning("Please type the correct reference password completely.")
                 
-                # Reset timings for next verification
-                if "verify_key_times" in st.session_state:
-                    st.session_state.verify_key_times = {}
-                
+                # Reset timings and input
+                st.session_state.verify_key_times = {}
                 st.session_state.verify_password_main = ""
             except Exception as e:
                 st.error(f"Verification error: {str(e)}")
