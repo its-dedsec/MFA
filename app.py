@@ -1,425 +1,108 @@
 import streamlit as st
 import numpy as np
 import pickle
+import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
 from datetime import datetime
 import os
-import hashlib
-import time
-import plotly.express as px
 
-# Page configuration
-st.set_page_config(page_title="Keystroke Dynamics-Based MFA", layout="wide")
-
-# Initialize session state variables
-if "sample_count" not in st.session_state:
-    st.session_state.sample_count = 0
-if "key_press_times" not in st.session_state:
-    st.session_state.key_press_times = {}
-if "last_key_time" not in st.session_state:
-    st.session_state.last_key_time = None
-if "training_data" not in st.session_state:
-    st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
-if "trained" not in st.session_state:
-    st.session_state.trained = False
-if "reference_password" not in st.session_state:
-    st.session_state.reference_password = "password123"
-if "samples" not in st.session_state:
-    st.session_state.samples = []
-
-# Constants
-DATA_FILE = "keystroke_data.csv"
+# Load or initialize model
 MODEL_FILE = "keystroke_model.pkl"
+DATA_FILE = "keystroke_data.csv"
 
-# Load existing model if available
 try:
     with open(MODEL_FILE, "rb") as f:
         model = pickle.load(f)
-        st.session_state.trained = True
+        trained = True
 except FileNotFoundError:
-    model = IsolationForest(contamination=0.1, random_state=42)
-    st.session_state.trained = False
+    model = OneClassSVM(kernel='rbf', gamma='auto')
+    trained = False
 
-# Load existing training data if available
-try:
-    if os.path.exists(DATA_FILE):
-        st.session_state.training_data = pd.read_csv(DATA_FILE)
-except Exception:
-    pass
+if "keystroke_timings" not in st.session_state:
+    st.session_state.keystroke_timings = []
 
-# Function to extract features from keystroke timings
-def extract_features(timings, password):
-    features = []
-    
-    # Convert timings dict to sorted list of (key, time) tuples
-    timing_list = sorted([(k, v) for k, v in timings.items()], key=lambda x: x[1])
-    
-    # Calculate time differences between consecutive keystrokes
-    for i in range(1, len(timing_list)):
-        key_code = ord(password[i])
-        time_diff = timing_list[i][1] - timing_list[i-1][1]
-        
-        features.append({
-            "KeyCode": key_code,
-            "TimeDiff": time_diff,
-            "Password": hashlib.sha256(password.encode()).hexdigest()[:8]
-        })
-    
-    return pd.DataFrame(features)
+# Load existing keystroke data
+if os.path.exists(DATA_FILE):
+    keystroke_data = pd.read_csv(DATA_FILE)
+else:
+    keystroke_data = pd.DataFrame(columns=["ASCII Value", "Time Difference"])
 
 # Streamlit UI
+st.set_page_config(page_title="Keystroke Dynamics-Based MFA", layout="wide")
+st.sidebar.header("Keystroke Authentication")
 st.title("Keystroke Dynamics-Based MFA")
 st.write("This system authenticates users based on their unique typing patterns.")
 
-# Tabs for different functionality
-tab1, tab2, tab3 = st.tabs(["Training", "Authentication", "Visualization"])
+# Input
+keystroke_input = st.text_input("Type a sample password", key="keystroke")
 
-# Sidebar
-st.sidebar.header("Keystroke Authentication")
-st.sidebar.write(f"Samples collected: {st.session_state.sample_count}/5")
-st.sidebar.write("Status: " + ("Trained ✅" if st.session_state.trained else "Not Trained ❌"))
+# Capture timing data
+if "previous_time" not in st.session_state:
+    st.session_state.previous_time = None
+
+if keystroke_input:
+    current_time = datetime.now()
+    for char in keystroke_input:
+        if st.session_state.previous_time:
+            time_diff = (current_time - st.session_state.previous_time).total_seconds()
+            st.session_state.keystroke_timings.append((ord(char), time_diff))
+        st.session_state.previous_time = current_time
+
+# Show sample count
+st.sidebar.write(f"Samples collected: {len(st.session_state.keystroke_timings)} / 5")
+
+# Train Model
+if st.button("Train Model"):
+    if len(st.session_state.keystroke_timings) < 5:
+        st.error("Need at least 5 samples to train. Keep typing and try again.")
+    else:
+        df = pd.DataFrame(st.session_state.keystroke_timings, columns=["ASCII Value", "Time Difference"])
+        keystroke_data = pd.concat([keystroke_data, df], ignore_index=True)
+        keystroke_data.to_csv(DATA_FILE, index=False)
+        
+        X = keystroke_data[["ASCII Value", "Time Difference"]].values
+        model.fit(X)
+        trained = True
+        with open(MODEL_FILE, "wb") as f:
+            pickle.dump(model, f)
+        
+        # Visualization - Training progress
+        progress_bar = st.progress(0)
+        for i in range(1, 101):
+            progress_bar.progress(i)
+        st.success("Training Completed!")
+
+# Verify User
+if st.button("Verify User"):
+    if not trained:
+        st.error("Model not trained yet")
+    else:
+        df_test = pd.DataFrame(st.session_state.keystroke_timings, columns=["ASCII Value", "Time Difference"])
+        X_test = df_test[["ASCII Value", "Time Difference"]].values
+        prediction = model.predict(X_test)
+        
+        if np.sum(prediction == 1) > np.sum(prediction == -1):
+            st.success("Authenticated")
+        else:
+            st.error("Verification failed, use secondary MFA")
+        
+        # Visualization - Keystroke Data Heatmap
+        fig, ax = plt.subplots()
+        sns.heatmap(keystroke_data.corr(), annot=True, cmap="coolwarm", ax=ax)
+        ax.set_title("Keystroke Data Correlation Heatmap")
+        st.pyplot(fig)
+
+        # Visualization - Typing Pattern
+        fig, ax = plt.subplots()
+        ax.plot(keystroke_data["ASCII Value"], keystroke_data["Time Difference"], marker='o', linestyle='-', label='Typing Pattern')
+        ax.set_title("Keystroke Timing Analysis")
+        ax.set_xlabel("Keystroke ASCII Value")
+        ax.set_ylabel("Time Difference (s)")
+        ax.legend()
+        st.pyplot(fig)
+
 st.sidebar.write("\n\n")
 st.sidebar.write("Developed for Final Year Project")
-
-# Training Tab
-with tab1:
-    st.header("Training Mode")
-    
-    # Set reference password
-    ref_pwd = st.text_input("Set Reference Password", value=st.session_state.reference_password)
-    if ref_pwd != st.session_state.reference_password:
-        st.session_state.reference_password = ref_pwd
-        st.session_state.sample_count = 0
-        st.session_state.samples = []
-        st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
-        st.info("Reference password updated. Please collect new samples.")
-    
-    st.write(f"Please type: **{st.session_state.reference_password}**")
-    
-    # Create columns for input and buttons
-    col1, col2 = st.columns([3, 1])
-    
-    # JavaScript to capture key press timings
-    js_code = f"""
-    <script>
-    const input = document.getElementById('password-input');
-    let keyTimes = {{}};
-    
-    input.addEventListener('keydown', function(e) {{
-        const key = e.key;
-        const index = input.value.length;
-        keyTimes[index] = new Date().getTime() / 1000;
-    }});
-    
-    function submitTimes() {{
-        const timesJson = JSON.stringify(keyTimes);
-        document.getElementById('key-times').value = timesJson;
-        document.getElementById('submit-form').click();
-        keyTimes = {{}};
-    }}
-    </script>
-    
-    <input type="text" id="password-input" 
-        placeholder="Type password here" 
-        style="width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px;"
-        onchange="submitTimes()">
-    <input type="hidden" id="key-times" name="key_times">
-    """
-    
-    with col1:
-        st.markdown(js_code, unsafe_allow_html=True)
-        times_input = st.text_input("Hidden Key Times", key="key_times", label_visibility="collapsed")
-        submit_button = st.form_submit_button("", key="submit-form", label_visibility="collapsed")
-    
-    with col2:
-        if st.button("Submit Sample", key="submit_sample"):
-            password_input = st.session_state.get("password_input", "")
-            
-            if password_input == st.session_state.reference_password and times_input:
-                try:
-                    # Parse the key timings from JSON
-                    key_timings = eval(times_input)
-                    
-                    # Store the sample
-                    st.session_state.samples.append({
-                        "password": password_input,
-                        "timings": key_timings
-                    })
-                    
-                    # Extract features
-                    features = extract_features(key_timings, password_input)
-                    
-                    # Add to training data
-                    if not features.empty:
-                        st.session_state.training_data = pd.concat([st.session_state.training_data, features], ignore_index=True)
-                    
-                    # Increment sample count
-                    st.session_state.sample_count += 1
-                    
-                    st.success(f"Sample {st.session_state.sample_count} captured successfully!")
-                    
-                    # Clear input
-                    st.session_state.password_input = ""
-                except Exception as e:
-                    st.error(f"Error capturing sample: {str(e)}")
-            else:
-                st.warning("Please type the correct reference password")
-    
-    # Manual input method (fallback)
-    st.subheader("Alternative Method")
-    st.write("If the above method doesn't work, use this manual input:")
-    
-    password_input = st.text_input("Type the reference password:", key="password_input")
-    
-    # Capture keystroke timings manually
-    if password_input:
-        current_time = time.time()
-        
-        # Record key press time
-        if len(password_input) > 0 and (len(password_input) not in st.session_state.key_press_times):
-            st.session_state.key_press_times[len(password_input)-1] = current_time
-    
-    # Manual submit button
-    if st.button("Submit Sample (Manual)"):
-        if password_input == st.session_state.reference_password:
-            # Record the last key if needed
-            if len(password_input) > 0 and (len(password_input)-1 not in st.session_state.key_press_times):
-                st.session_state.key_press_times[len(password_input)-1] = time.time()
-            
-            # Store the sample
-            if len(st.session_state.key_press_times) > 1:
-                st.session_state.samples.append({
-                    "password": password_input,
-                    "timings": st.session_state.key_press_times.copy()
-                })
-                
-                # Extract features
-                features = extract_features(st.session_state.key_press_times, password_input)
-                
-                # Add to training data
-                if not features.empty:
-                    st.session_state.training_data = pd.concat([st.session_state.training_data, features], ignore_index=True)
-                
-                # Increment sample count
-                st.session_state.sample_count += 1
-                
-                st.success(f"Sample {st.session_state.sample_count} captured successfully!")
-                
-                # Reset timings for next sample
-                st.session_state.key_press_times = {}
-            else:
-                st.warning("Not enough keystroke data captured. Please type the password again.")
-        else:
-            st.warning("Please type the correct reference password")
-    
-    # Display sample progress
-    if st.session_state.sample_count > 0:
-        st.progress(min(st.session_state.sample_count/5, 1.0))
-    
-    # Train model button
-    if st.button("Train Model"):
-        if st.session_state.sample_count < 3:
-            st.error("Need at least 3 samples to train. Please collect more samples.")
-        else:
-            # Show progress bar
-            progress_bar = st.progress(0)
-            
-            # Train model
-            try:
-                X = st.session_state.training_data[["KeyCode", "TimeDiff"]].values
-                
-                # Update progress
-                for i in range(50):
-                    progress_bar.progress(i/100)
-                    time.sleep(0.01)
-                
-                # Train the model
-                model = IsolationForest(contamination=0.1, random_state=42)
-                model.fit(X)
-                
-                # Update progress
-                for i in range(50, 101):
-                    progress_bar.progress(i/100)
-                    time.sleep(0.01)
-                
-                # Save model and data
-                with open(MODEL_FILE, "wb") as f:
-                    pickle.dump(model, f)
-                
-                st.session_state.training_data.to_csv(DATA_FILE, index=False)
-                
-                st.session_state.trained = True
-                st.success("Training Completed! You can now verify users.")
-            except Exception as e:
-                st.error(f"Training failed: {str(e)}")
-
-# Authentication Tab
-with tab2:
-    st.header("Authentication Mode")
-    
-    if not st.session_state.trained:
-        st.warning("Model not trained yet. Please train the model first.")
-    else:
-        st.write(f"Please type: **{st.session_state.reference_password}**")
-        
-        # Create columns for input and verification
-        auth_col1, auth_col2 = st.columns([3, 1])
-        
-        with auth_col1:
-            # JavaScript to capture key press timings for verification
-            verify_js_code = f"""
-            <script>
-            const verifyInput = document.getElementById('verify-input');
-            let verifyKeyTimes = {{}};
-            
-            verifyInput.addEventListener('keydown', function(e) {{
-                const key = e.key;
-                const index = verifyInput.value.length;
-                verifyKeyTimes[index] = new Date().getTime() / 1000;
-            }});
-            
-            function submitVerifyTimes() {{
-                const timesJson = JSON.stringify(verifyKeyTimes);
-                document.getElementById('verify-key-times').value = timesJson;
-                document.getElementById('verify-form').click();
-                verifyKeyTimes = {{}};
-            }}
-            </script>
-            
-            <input type="text" id="verify-input" 
-                placeholder="Type password for verification" 
-                style="width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px;"
-                onchange="submitVerifyTimes()">
-            <input type="hidden" id="verify-key-times" name="verify_key_times">
-            """
-            
-            st.markdown(verify_js_code, unsafe_allow_html=True)
-            verify_times_input = st.text_input("Hidden Verify Key Times", key="verify_key_times", label_visibility="collapsed")
-            verify_submit = st.form_submit_button("", key="verify-form", label_visibility="collapsed")
-        
-        with auth_col2:
-            verify_button = st.button("Verify User")
-        
-        # Alternative manual verification
-        st.subheader("Alternative Verification Method")
-        verify_password = st.text_input("Type the reference password to verify:", key="verify_password")
-        
-        # Capture verification keystroke timings
-        if verify_password:
-            current_time = time.time()
-            
-            # Record key press time
-            if len(verify_password) > 0 and (len(verify_password) not in st.session_state.key_press_times):
-                st.session_state.key_press_times[len(verify_password)-1] = current_time
-        
-        manual_verify = st.button("Verify (Manual)")
-        
-        # Process verification
-        if verify_button or manual_verify:
-            try:
-                # Get the password and timings
-                if verify_button and verify_times_input:
-                    try:
-                        # Parse the key timings from JSON
-                        verify_timings = eval(verify_times_input)
-                        password = st.session_state.reference_password
-                    except:
-                        st.error("Error parsing verification data. Please try again.")
-                        verify_timings = None
-                        password = None
-                elif manual_verify:
-                    verify_timings = st.session_state.key_press_times.copy()
-                    password = verify_password
-                else:
-                    verify_timings = None
-                    password = None
-                
-                # Verify the user
-                if password == st.session_state.reference_password and verify_timings and len(verify_timings) > 1:
-                    # Show progress
-                    auth_progress = st.progress(0)
-                    for i in range(50):
-                        auth_progress.progress(i/100)
-                        time.sleep(0.01)
-                    
-                    # Extract features
-                    features = extract_features(verify_timings, password)
-                    
-                    if not features.empty:
-                        # Prepare test data
-                        X_test = features[["KeyCode", "TimeDiff"]].values
-                        
-                        # Make prediction
-                        predictions = model.predict(X_test)
-                        scores = model.decision_function(X_test)
-                        
-                        # Calculate authentication score
-                        auth_score = np.mean(scores)
-                        
-                        # Determine if authenticated
-                        is_authenticated = np.mean(predictions) == 1  # 1 means inlier (normal)
-                        
-                        # Update progress
-                        for i in range(50, 101):
-                            auth_progress.progress(i/100)
-                            time.sleep(0.01)
-                        
-                        # Display result
-                        if is_authenticated:
-                            st.success(f"✅ Authentication successful! (Score: {auth_score:.2f})")
-                            st.balloons()
-                        else:
-                            st.error(f"❌ Authentication failed. (Score: {auth_score:.2f})")
-                            st.warning("Unusual typing pattern detected. Please try again or use alternative authentication.")
-                    else:
-                        st.error("Not enough data to verify. Please type the complete password.")
-                else:
-                    st.warning("Please type the correct reference password completely.")
-                
-                # Reset timings for next verification
-                st.session_state.key_press_times = {}
-            except Exception as e:
-                st.error(f"Verification error: {str(e)}")
-
-# Visualization Tab
-with tab3:
-    st.header("Keystroke Data Visualization")
-    
-    if st.session_state.training_data.empty:
-        st.info("No training data available. Please collect samples first.")
-    else:
-        # Data summary
-        st.subheader("Training Data Summary")
-        st.write(f"Total samples: {st.session_state.sample_count}")
-        st.write(f"Feature records: {len(st.session_state.training_data)}")
-        
-        # Visualization - Typing Pattern
-        st.subheader("Keystroke Timing Analysis")
-        
-        # Create interactive visualizations with plotly
-        fig = px.scatter(st.session_state.training_data, x="KeyCode", y="TimeDiff", 
-                         title="Keystroke Timing Patterns",
-                         labels={"KeyCode": "Key Code (ASCII)", "TimeDiff": "Time Difference (s)"},
-                         color="TimeDiff", size="TimeDiff")
-        st.plotly_chart(fig)
-        
-        # Distribution of time differences
-        fig = px.histogram(st.session_state.training_data, x="TimeDiff", 
-                           title="Distribution of Time Differences Between Keystrokes",
-                           labels={"TimeDiff": "Time Difference (seconds)"},
-                           nbins=20)
-        st.plotly_chart(fig)
-        
-        # Heatmap using matplotlib
-        st.subheader("Keystroke Data Correlation Heatmap")
-        
-        # Create correlation matrix and heatmap
-        if len(st.session_state.training_data.columns) >= 2:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            corr_matrix = st.session_state.training_data[["KeyCode", "TimeDiff"]].corr()
-            sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", ax=ax)
-            ax.set_title("Keystroke Data Correlation Heatmap")
-            st.pyplot(fig)
