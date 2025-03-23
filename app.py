@@ -1,10 +1,14 @@
 import streamlit as st
 import numpy as np
 import pickle
-from sklearn.svm import OneClassSVM
+import time
+import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.svm import OneClassSVM
+from datetime import datetime
 
-# Load stored model or initialize new one
+# Load or initialize model
 try:
     with open("keystroke_model.pkl", "rb") as f:
         model = pickle.load(f)
@@ -15,44 +19,70 @@ else:
     trained = True
 
 keystroke_data = []  # Store samples for training
+keystroke_timings = []  # Store timing data
 
+# Streamlit UI
+st.set_page_config(page_title="Keystroke Dynamics-Based MFA", layout="wide")
+st.sidebar.header("Keystroke Authentication")
 st.title("Keystroke Dynamics-Based MFA")
-st.write("Enter your keystrokes for authentication")
+st.write("This system authenticates users based on their unique typing patterns.")
 
+# Input
 keystroke_input = st.text_input("Type a sample password")
 
+# Capture timing data
+if keystroke_input:
+    keystroke_timings.append((keystroke_input, datetime.now()))
+
+# Train Model
 if st.button("Train Model"):
-    if len(keystroke_input) < 5:
+    if len(keystroke_timings) < 5:
         st.error("Need more samples to train")
     else:
-        X = np.array([list(map(ord, keystroke_input))])
+        df = pd.DataFrame([(ord(char), (t2 - t1).total_seconds()) 
+                           for (text, t1), (text2, t2) in zip(keystroke_timings[:-1], keystroke_timings[1:])], 
+                          columns=["ASCII Value", "Time Difference"])
+        X = df[["ASCII Value", "Time Difference"]].values
         model.fit(X)
         trained = True
-        
         with open("keystroke_model.pkl", "wb") as f:
             pickle.dump(model, f)
         
-        # Visualization: Show training progress without sleep
+        # Visualization - Training progress
         progress_bar = st.progress(0)
         for i in range(1, 101):
             progress_bar.progress(i)
         st.success("Training Completed!")
 
+# Verify User
 if st.button("Verify User"):
     if not trained:
         st.error("Model not trained yet")
     else:
-        X_test = np.array([list(map(ord, keystroke_input))])
+        df_test = pd.DataFrame([(ord(char), (t2 - t1).total_seconds()) 
+                                for (text, t1), (text2, t2) in zip(keystroke_timings[:-1], keystroke_timings[1:])], 
+                               columns=["ASCII Value", "Time Difference"])
+        X_test = df_test[["ASCII Value", "Time Difference"]].values
         prediction = model.predict(X_test)
-        if prediction[0] == 1:
+        if np.mean(prediction) > 0:
             st.success("Authenticated")
         else:
             st.error("Verification failed, use secondary MFA")
         
-        # Visualization: Plot keystroke data
+        # Visualization - Keystroke Data Heatmap
         fig, ax = plt.subplots()
-        ax.plot(range(len(keystroke_input)), list(map(ord, keystroke_input)), marker='o', linestyle='-')
-        ax.set_title("Keystroke Data Processing")
-        ax.set_xlabel("Keystroke Index")
-        ax.set_ylabel("ASCII Value")
+        sns.heatmap(df.corr(), annot=True, cmap="coolwarm", ax=ax)
+        ax.set_title("Keystroke Data Correlation Heatmap")
         st.pyplot(fig)
+
+        # Visualization - Typing Pattern
+        fig, ax = plt.subplots()
+        ax.plot(df["ASCII Value"], df["Time Difference"], marker='o', linestyle='-', label='Typing Pattern')
+        ax.set_title("Keystroke Timing Analysis")
+        ax.set_xlabel("Keystroke ASCII Value")
+        ax.set_ylabel("Time Difference (s)")
+        ax.legend()
+        st.pyplot(fig)
+
+st.sidebar.write("\n\n")
+st.sidebar.write("Developed for Final Year Project")
