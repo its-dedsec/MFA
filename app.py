@@ -3,7 +3,6 @@ import numpy as np
 import pickle
 from sklearn.svm import OneClassSVM
 import matplotlib.pyplot as plt
-import time
 
 # Load stored model or initialize new one
 try:
@@ -33,11 +32,10 @@ if st.button("Train Model"):
         with open("keystroke_model.pkl", "wb") as f:
             pickle.dump(model, f)
         
-        # Visualization: Show training progress
+        # Visualization: Show training progress without sleep
         progress_bar = st.progress(0)
-        for i in range(100):
-            time.sleep(0.02)
-            progress_bar.progress(i + 1)
+        for i in range(1, 101):
+            progress_bar.progress(i)
         st.success("Training Completed!")
 
 if st.button("Verify User"):
