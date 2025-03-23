@@ -159,9 +159,10 @@ with tab1:
                         f"Sample {st.session_state.sample_count} captured successfully!"
                     )
                     
-                    # Reset timings and input
+                    # Reset timings
                     st.session_state.key_press_times = {}
-                    st.session_state.password_input_main = ""
+                    # DO NOT CLEAR password_input_main here.  The user should see what they typed.
+                    
                 else:
                     st.session_state.feedback = (
                         "Not enough keystroke data captured. Please type the password again."
@@ -300,7 +301,8 @@ with tab2:
                 
                 # Reset timings and input
                 st.session_state.verify_key_times = {}
-                st.session_state.verify_password_main = ""
+                #  DO NOT CLEAR verify_password_main here.  The user should see what they typed.
+                
             except Exception as e:
                 st.error(f"Verification error: {str(e)}")
 
