@@ -1,5 +1,9 @@
 streamlit
 numpy
-scikit-learn
+pandas
 matplotlib
 seaborn
+scikit-learn
+pickle-mixin
+datetime
+plotly
