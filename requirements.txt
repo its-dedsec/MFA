@@ -1,8 +1,4 @@
-flask
-flask-cors
-numpy
-pickle-mixin
-scikit-learn
 streamlit
-requests
+numpy
+scikit-learn
 matplotlib
