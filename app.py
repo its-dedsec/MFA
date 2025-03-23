@@ -156,7 +156,7 @@ with tab1:
                     # Increment sample count
                     st.session_state.sample_count += 1
                     st.session_state.feedback = (
-                        f"Sample {st.session_state.sample_count} captured successfully!"
+                        f"Sample {st.session_state.sample_count} captured successfully!  Samples Collected: {st.session_state.sample_count}" #added sample count to the message
                     )
                     
                     # Reset timings
@@ -165,7 +165,7 @@ with tab1:
                     
                 else:
                     st.session_state.feedback = (
-                        "Not enough keystroke data captured. Please type the password again."
+                        "Not enough keystroke data captured. Please type the *entire* password again." #changed the message
                     )
             else:
                 st.session_state.feedback = "Please type the correct reference password"
@@ -363,3 +363,4 @@ with tab3:
                 st.pyplot(fig)
             except Exception as e:
                 st.error(f"Error creating heatmap: {e}")
+
