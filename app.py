@@ -8,6 +8,7 @@ from sklearn.ensemble import IsolationForest
 import time
 import hashlib
 import plotly.express as px
+import os  # Import the os module
 
 # Page configuration
 st.set_page_config(page_title="Keystroke Dynamics-Based MFA", layout="wide")
@@ -27,6 +28,10 @@ if "samples" not in st.session_state:
     st.session_state.samples = []
 if "input_method" not in st.session_state:  # Added to track input method
     st.session_state.input_method = "primary"
+if "password_input_main" not in st.session_state:  # Add this
+    st.session_state.password_input_main = ""
+if "alt_password_input" not in st.session_state: # Add this
+    st.session_state.alt_password_input = ""
 
 # Constants
 DATA_FILE = "keystroke_data.csv"
@@ -191,6 +196,7 @@ with tab1:
                 
                 # Reset timings for next sample
                 st.session_state.alt_key_press_times = {}
+                st.session_state.alt_password_input = "" # Clear
             else:
                 st.warning("Not enough keystroke data captured. Please type the password again.")
         else:
@@ -409,4 +415,3 @@ with tab3:
                 st.pyplot(fig)
             except Exception as e:
                 st.error(f"Error creating heatmap: {e}")
-
