@@ -114,7 +114,7 @@ with tab1:
             st.session_state.key_press_times[key_index] = current_time
     
     # Submit button (outside of any form now)
-    if col2.button("Submit Sample", key="submit_sample_main"):  # Place button in col2
+    if col2.button("Submit Sample", key="submit_sample_main", use_container_width=True):  # Place button in col2
         if password_input == st.session_state.reference_password:
             # Ensure we have enough keystroke data
             if len(st.session_state.key_press_times) > 1:
@@ -165,7 +165,7 @@ with tab1:
             st.session_state.alt_key_press_times[alt_key_index] = current_time
     
     # Manual submit button
-    if st.button("Submit Sample (Manual)"):
+    if st.button("Submit Sample (Manual)", use_container_width=True):
         if alt_password_input == st.session_state.reference_password:
             # Ensure we have alternative keystroke timings
             if "alt_key_press_times" in st.session_state and len(st.session_state.alt_key_press_times) > 1:
@@ -201,7 +201,7 @@ with tab1:
         st.progress(min(st.session_state.sample_count / 5, 1.0))
     
     # Train model button
-    if st.button("Train Model"):
+    if st.button("Train Model", use_container_width=True):
         if st.session_state.sample_count < 3:
             st.error("Need at least 3 samples to train. Please collect more samples.")
         else:
@@ -265,7 +265,7 @@ with tab2:
                 st.session_state.verify_key_times[verify_key_index] = current_time
         
         # Verify button
-        verify_button = auth_col2.button("Verify User")
+        verify_button = auth_col2.button("Verify User", use_container_width=True)
         
         # Alternative manual verification
         st.subheader("Alternative Verification Method")
@@ -284,7 +284,7 @@ with tab2:
                     st.session_state.alt_verify_key_times = {}
                 st.session_state.alt_verify_key_times[alt_verify_key_index] = current_time
         
-        manual_verify = st.button("Verify (Manual)")
+        manual_verify = st.button("Verify (Manual)", use_container_width=True)
         
         # Process verification
         if verify_button or manual_verify:
@@ -409,3 +409,4 @@ with tab3:
                 st.pyplot(fig)
             except Exception as e:
                 st.error(f"Error creating heatmap: {e}")
+
