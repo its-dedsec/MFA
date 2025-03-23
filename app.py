@@ -102,97 +102,24 @@ with tab1:
     # Create columns for input and buttons
     col1, col2 = st.columns([3, 1])
     
-    # JavaScript to capture key press timings
-    js_code = f"""
-    <script>
-    const input = document.getElementById('password-input');
-    let keyTimes = {{}};
-    
-    input.addEventListener('keydown', function(e) {{
-        const key = e.key;
-        const index = input.value.length;
-        keyTimes[index] = new Date().getTime() / 1000;
-    }});
-    
-    function submitTimes() {{
-        const timesJson = JSON.stringify(keyTimes);
-        document.getElementById('key-times').value = timesJson;
-        document.getElementById('submit-form').click();
-        keyTimes = {{}};
-    }}
-    </script>
-    
-    <input type="text" id="password-input" 
-        placeholder="Type password here" 
-        style="width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px;"
-        onchange="submitTimes()">
-    <input type="hidden" id="key-times" name="key_times">
-    """
-    
-    with col1:
-        st.markdown(js_code, unsafe_allow_html=True)
-        # Using a form to properly contain the form elements
-        with st.form(key="keystroke_form"):
-            times_input = st.text_input("Hidden Key Times", key="key_times", label_visibility="collapsed")
-            submit_button = st.form_submit_button("", key="submit-form", label_visibility="collapsed")
-    
-    with col2:
-        if st.button("Submit Sample", key="submit_sample"):
-            password_input = st.session_state.get("password_input", "")
-            
-            if password_input == st.session_state.reference_password and times_input:
-                try:
-                    # Parse the key timings from JSON
-                    key_timings = eval(times_input)
-                    
-                    # Store the sample
-                    st.session_state.samples.append({
-                        "password": password_input,
-                        "timings": key_timings
-                    })
-                    
-                    # Extract features
-                    features = extract_features(key_timings, password_input)
-                    
-                    # Add to training data
-                    if not features.empty:
-                        st.session_state.training_data = pd.concat([st.session_state.training_data, features], ignore_index=True)
-                    
-                    # Increment sample count
-                    st.session_state.sample_count += 1
-                    
-                    st.success(f"Sample {st.session_state.sample_count} captured successfully!")
-                    
-                    # Clear input
-                    st.session_state.password_input = ""
-                except Exception as e:
-                    st.error(f"Error capturing sample: {str(e)}")
-            else:
-                st.warning("Please type the correct reference password")
-    
-    # Manual input method (fallback)
-    st.subheader("Alternative Method")
-    st.write("If the above method doesn't work, use this manual input:")
-    
-    password_input = st.text_input("Type the reference password:", key="password_input")
+    # Modified approach - Use regular input and handle submission via a button
+    password_input = st.text_input("Type the reference password:", key="password_input_main")
     
     # Capture keystroke timings manually
     if password_input:
         current_time = time.time()
+        key_index = len(password_input) - 1
         
-        # Record key press time
-        if len(password_input) > 0 and (len(password_input) not in st.session_state.key_press_times):
-            st.session_state.key_press_times[len(password_input)-1] = current_time
+        # Record key press time if it's not already recorded
+        if key_index >= 0 and key_index not in st.session_state.key_press_times:
+            st.session_state.key_press_times[key_index] = current_time
     
-    # Manual submit button
-    if st.button("Submit Sample (Manual)"):
+    # Submit button (outside of any form now)
+    if col2.button("Submit Sample", key="submit_sample_main"):
         if password_input == st.session_state.reference_password:
-            # Record the last key if needed
-            if len(password_input) > 0 and (len(password_input)-1 not in st.session_state.key_press_times):
-                st.session_state.key_press_times[len(password_input)-1] = time.time()
-            
-            # Store the sample
+            # Ensure we have enough keystroke data
             if len(st.session_state.key_press_times) > 1:
+                # Store the sample
                 st.session_state.samples.append({
                     "password": password_input,
                     "timings": st.session_state.key_press_times.copy()
@@ -212,6 +139,55 @@ with tab1:
                 
                 # Reset timings for next sample
                 st.session_state.key_press_times = {}
+                # Clear input
+                st.session_state.password_input_main = ""
+            else:
+                st.warning("Not enough keystroke data captured. Please type the password again.")
+        else:
+            st.warning("Please type the correct reference password")
+    
+    # Alternative manual input method (fallback)
+    st.subheader("Alternative Method")
+    st.write("If the above method doesn't work, use this manual input:")
+    
+    alt_password_input = st.text_input("Type the reference password:", key="alt_password_input")
+    
+    # Capture keystroke timings for alternative method
+    if alt_password_input:
+        current_time = time.time()
+        alt_key_index = len(alt_password_input) - 1
+        
+        # Record key press time
+        if alt_key_index >= 0 and alt_key_index not in st.session_state.get("alt_key_press_times", {}):
+            if "alt_key_press_times" not in st.session_state:
+                st.session_state.alt_key_press_times = {}
+            st.session_state.alt_key_press_times[alt_key_index] = current_time
+    
+    # Manual submit button
+    if st.button("Submit Sample (Manual)"):
+        if alt_password_input == st.session_state.reference_password:
+            # Ensure we have alternative keystroke timings
+            if "alt_key_press_times" in st.session_state and len(st.session_state.alt_key_press_times) > 1:
+                # Store the sample
+                st.session_state.samples.append({
+                    "password": alt_password_input,
+                    "timings": st.session_state.alt_key_press_times.copy()
+                })
+                
+                # Extract features
+                features = extract_features(st.session_state.alt_key_press_times, alt_password_input)
+                
+                # Add to training data
+                if not features.empty:
+                    st.session_state.training_data = pd.concat([st.session_state.training_data, features], ignore_index=True)
+                
+                # Increment sample count
+                st.session_state.sample_count += 1
+                
+                st.success(f"Sample {st.session_state.sample_count} captured successfully!")
+                
+                # Reset timings for next sample
+                st.session_state.alt_key_press_times = {}
             else:
                 st.warning("Not enough keystroke data captured. Please type the password again.")
         else:
@@ -270,54 +246,37 @@ with tab2:
         # Create columns for input and verification
         auth_col1, auth_col2 = st.columns([3, 1])
         
-        with auth_col1:
-            # JavaScript to capture key press timings for verification
-            verify_js_code = f"""
-            <script>
-            const verifyInput = document.getElementById('verify-input');
-            let verifyKeyTimes = {{}};
-            
-            verifyInput.addEventListener('keydown', function(e) {{
-                const key = e.key;
-                const index = verifyInput.value.length;
-                verifyKeyTimes[index] = new Date().getTime() / 1000;
-            }});
-            
-            function submitVerifyTimes() {{
-                const timesJson = JSON.stringify(verifyKeyTimes);
-                document.getElementById('verify-key-times').value = timesJson;
-                document.getElementById('verify-form').click();
-                verifyKeyTimes = {{}};
-            }}
-            </script>
-            
-            <input type="text" id="verify-input" 
-                placeholder="Type password for verification" 
-                style="width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px;"
-                onchange="submitVerifyTimes()">
-            <input type="hidden" id="verify-key-times" name="verify_key_times">
-            """
-            
-            st.markdown(verify_js_code, unsafe_allow_html=True)
-            # Using a form to properly contain the form elements
-            with st.form(key="verify_form"):
-                verify_times_input = st.text_input("Hidden Verify Key Times", key="verify_key_times", label_visibility="collapsed")
-                verify_submit = st.form_submit_button("", key="verify-form", label_visibility="collapsed")
-        
-        with auth_col2:
-            verify_button = st.button("Verify User")
-        
-        # Alternative manual verification
-        st.subheader("Alternative Verification Method")
-        verify_password = st.text_input("Type the reference password to verify:", key="verify_password")
+        # Simplified authentication approach without forms
+        verify_password = auth_col1.text_input("Type password for verification:", key="verify_password_main")
         
         # Capture verification keystroke timings
         if verify_password:
             current_time = time.time()
+            verify_key_index = len(verify_password) - 1
             
             # Record key press time
-            if len(verify_password) > 0 and (len(verify_password) not in st.session_state.key_press_times):
-                st.session_state.key_press_times[len(verify_password)-1] = current_time
+            if verify_key_index >= 0 and verify_key_index not in st.session_state.get("verify_key_times", {}):
+                if "verify_key_times" not in st.session_state:
+                    st.session_state.verify_key_times = {}
+                st.session_state.verify_key_times[verify_key_index] = current_time
+        
+        # Verify button
+        verify_button = auth_col2.button("Verify User")
+        
+        # Alternative manual verification
+        st.subheader("Alternative Verification Method")
+        alt_verify_password = st.text_input("Type the reference password to verify:", key="alt_verify_password")
+        
+        # Capture verification keystroke timings for alternative method
+        if alt_verify_password:
+            current_time = time.time()
+            alt_verify_key_index = len(alt_verify_password) - 1
+            
+            # Record key press time
+            if alt_verify_key_index >= 0 and alt_verify_key_index not in st.session_state.get("alt_verify_key_times", {}):
+                if "alt_verify_key_times" not in st.session_state:
+                    st.session_state.alt_verify_key_times = {}
+                st.session_state.alt_verify_key_times[alt_verify_key_index] = current_time
         
         manual_verify = st.button("Verify (Manual)")
         
@@ -325,24 +284,18 @@ with tab2:
         if verify_button or manual_verify:
             try:
                 # Get the password and timings
-                if verify_button and verify_times_input:
-                    try:
-                        # Parse the key timings from JSON
-                        verify_timings = eval(verify_times_input)
-                        password = st.session_state.reference_password
-                    except:
-                        st.error("Error parsing verification data. Please try again.")
-                        verify_timings = None
-                        password = None
-                elif manual_verify:
-                    verify_timings = st.session_state.key_press_times.copy()
+                if verify_button:
+                    verify_timings = st.session_state.get("verify_key_times", {})
                     password = verify_password
+                elif manual_verify:
+                    verify_timings = st.session_state.get("alt_verify_key_times", {})
+                    password = alt_verify_password
                 else:
-                    verify_timings = None
-                    password = None
+                    verify_timings = {}
+                    password = ""
                 
                 # Verify the user
-                if password == st.session_state.reference_password and verify_timings and len(verify_timings) > 1:
+                if password == st.session_state.reference_password and len(verify_timings) > 1:
                     # Show progress
                     auth_progress = st.progress(0)
                     for i in range(50):
@@ -384,7 +337,10 @@ with tab2:
                     st.warning("Please type the correct reference password completely.")
                 
                 # Reset timings for next verification
-                st.session_state.key_press_times = {}
+                if "verify_key_times" in st.session_state:
+                    st.session_state.verify_key_times = {}
+                if "alt_verify_key_times" in st.session_state:
+                    st.session_state.alt_verify_key_times = {}
             except Exception as e:
                 st.error(f"Verification error: {str(e)}")
 
