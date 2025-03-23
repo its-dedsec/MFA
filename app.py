@@ -57,7 +57,11 @@ except FileNotFoundError:
 # Load existing training data if available
 try:
     if os.path.exists(DATA_FILE):
-        st.session_state.training_data = pd.read_csv(DATA_FILE)
+        try:
+            st.session_state.training_data = pd.read_csv(DATA_FILE)
+        except Exception as e:
+            st.error(f"Error reading training data: {e}")
+            st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
 except Exception:
     pass
 
@@ -149,9 +153,22 @@ with tab1:
                     
                     # Add to training data
                     if not features.empty:
-                        st.session_state.training_data = pd.concat(
-                            [st.session_state.training_data, features], ignore_index=True
-                        )
+                        # Print the columns of the features DataFrame *before* concatenation
+                        print("Columns of 'features' DataFrame:", features.columns)
+                        # Print the first few rows of the features DataFrame
+                        print(features.head())
+
+                        # Print the columns of the training data DataFrame *before* concatenation
+                        print("Columns of 'st.session_state.training_data' DataFrame:", st.session_state.training_data.columns)
+                        # Print the first few rows of the training data DataFrame
+                        print(st.session_state.training_data.head())
+                        try:
+                            st.session_state.training_data = pd.concat(
+                                [st.session_state.training_data, features], ignore_index=True
+                            )
+                        except Exception as e:
+                            st.error(f"Error during pd.concat: {e}")
+                            return
                     
                     # Increment sample count
                     st.session_state.sample_count += 1
@@ -193,6 +210,11 @@ with tab1:
             try:
                 X = st.session_state.training_data[["KeyCode", "TimeDiff"]].values
                 
+                # Check if X is empty
+                if X.size == 0:
+                    st.error("Training failed: No data available for training.  This usually means no features were extracted.  Check your password and how you are typing it.")
+                    return
+                
                 # Update progress
                 for i in range(50):
                     progress_bar.progress(i / 100)
@@ -217,7 +239,8 @@ with tab1:
                 st.success("Training Completed! You can now verify users.")
             except Exception as e:
                 st.error(f"Training failed: {str(e)}")
-
+                st.error(f"Exception during training: {e}") #added
+                print(f"Exception during training: {e}") #added
 
 # Authentication Tab
 with tab2:
@@ -363,4 +386,3 @@ with tab3:
                 st.pyplot(fig)
             except Exception as e:
                 st.error(f"Error creating heatmap: {e}")
-
