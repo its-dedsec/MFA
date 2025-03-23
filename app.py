@@ -5,10 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
-from datetime import datetime
-import os
-import hashlib
 import time
+import hashlib
 import plotly.express as px
 
 # Page configuration
@@ -19,8 +17,6 @@ if "sample_count" not in st.session_state:
     st.session_state.sample_count = 0
 if "key_press_times" not in st.session_state:
     st.session_state.key_press_times = {}
-if "last_key_time" not in st.session_state:
-    st.session_state.last_key_time = None
 if "training_data" not in st.session_state:
     st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
 if "trained" not in st.session_state:
@@ -29,6 +25,8 @@ if "reference_password" not in st.session_state:
     st.session_state.reference_password = "password123"
 if "samples" not in st.session_state:
     st.session_state.samples = []
+if "input_method" not in st.session_state:  # Added to track input method
+    st.session_state.input_method = "primary"
 
 # Constants
 DATA_FILE = "keystroke_data.csv"
@@ -60,15 +58,16 @@ def extract_features(timings, password):
     # Calculate time differences between consecutive keystrokes
     for i in range(1, len(timing_list)):
         key_code = ord(password[i])
-        time_diff = timing_list[i][1] - timing_list[i-1][1]
+        time_diff = timing_list[i][1] - timing_list[i - 1][1]
         
         features.append({
             "KeyCode": key_code,
             "TimeDiff": time_diff,
-            "Password": hashlib.sha256(password.encode()).hexdigest()[:8]
+            "Password": hashlib.sha256(password.encode()).hexdigest()[:8],
         })
     
     return pd.DataFrame(features)
+
 
 # Streamlit UI
 st.title("Keystroke Dynamics-Based MFA")
@@ -103,7 +102,7 @@ with tab1:
     col1, col2 = st.columns([3, 1])
     
     # Modified approach - Use regular input and handle submission via a button
-    password_input = st.text_input("Type the reference password:", key="password_input_main")
+    password_input = col1.text_input("Type the reference password:", key="password_input_main")
     
     # Capture keystroke timings manually
     if password_input:
@@ -115,14 +114,14 @@ with tab1:
             st.session_state.key_press_times[key_index] = current_time
     
     # Submit button (outside of any form now)
-    if col2.button("Submit Sample", key="submit_sample_main"):
+    if col2.button("Submit Sample", key="submit_sample_main"):  # Place button in col2
         if password_input == st.session_state.reference_password:
             # Ensure we have enough keystroke data
             if len(st.session_state.key_press_times) > 1:
                 # Store the sample
                 st.session_state.samples.append({
                     "password": password_input,
-                    "timings": st.session_state.key_press_times.copy()
+                    "timings": st.session_state.key_press_times.copy(),
                 })
                 
                 # Extract features
@@ -130,7 +129,9 @@ with tab1:
                 
                 # Add to training data
                 if not features.empty:
-                    st.session_state.training_data = pd.concat([st.session_state.training_data, features], ignore_index=True)
+                    st.session_state.training_data = pd.concat(
+                        [st.session_state.training_data, features], ignore_index=True
+                    )
                 
                 # Increment sample count
                 st.session_state.sample_count += 1
@@ -171,7 +172,7 @@ with tab1:
                 # Store the sample
                 st.session_state.samples.append({
                     "password": alt_password_input,
-                    "timings": st.session_state.alt_key_press_times.copy()
+                    "timings": st.session_state.alt_key_press_times.copy(),
                 })
                 
                 # Extract features
@@ -179,7 +180,9 @@ with tab1:
                 
                 # Add to training data
                 if not features.empty:
-                    st.session_state.training_data = pd.concat([st.session_state.training_data, features], ignore_index=True)
+                    st.session_state.training_data = pd.concat(
+                        [st.session_state.training_data, features], ignore_index=True
+                    )
                 
                 # Increment sample count
                 st.session_state.sample_count += 1
@@ -195,7 +198,7 @@ with tab1:
     
     # Display sample progress
     if st.session_state.sample_count > 0:
-        st.progress(min(st.session_state.sample_count/5, 1.0))
+        st.progress(min(st.session_state.sample_count / 5, 1.0))
     
     # Train model button
     if st.button("Train Model"):
@@ -211,7 +214,7 @@ with tab1:
                 
                 # Update progress
                 for i in range(50):
-                    progress_bar.progress(i/100)
+                    progress_bar.progress(i / 100)
                     time.sleep(0.01)
                 
                 # Train the model
@@ -220,7 +223,7 @@ with tab1:
                 
                 # Update progress
                 for i in range(50, 101):
-                    progress_bar.progress(i/100)
+                    progress_bar.progress(i / 100)
                     time.sleep(0.01)
                 
                 # Save model and data
@@ -233,6 +236,7 @@ with tab1:
                 st.success("Training Completed! You can now verify users.")
             except Exception as e:
                 st.error(f"Training failed: {str(e)}")
+
 
 # Authentication Tab
 with tab2:
@@ -273,7 +277,9 @@ with tab2:
             alt_verify_key_index = len(alt_verify_password) - 1
             
             # Record key press time
-            if alt_verify_key_index >= 0 and alt_verify_key_index not in st.session_state.get("alt_verify_key_times", {}):
+            if alt_verify_key_index >= 0 and alt_verify_key_index not in st.session_state.get(
+                "alt_verify_key_times", {}
+            ):
                 if "alt_verify_key_times" not in st.session_state:
                     st.session_state.alt_verify_key_times = {}
                 st.session_state.alt_verify_key_times[alt_verify_key_index] = current_time
@@ -299,7 +305,7 @@ with tab2:
                     # Show progress
                     auth_progress = st.progress(0)
                     for i in range(50):
-                        auth_progress.progress(i/100)
+                        auth_progress.progress(i / 100)
                         time.sleep(0.01)
                     
                     # Extract features
@@ -321,7 +327,7 @@ with tab2:
                         
                         # Update progress
                         for i in range(50, 101):
-                            auth_progress.progress(i/100)
+                            auth_progress.progress(i / 100)
                             time.sleep(0.01)
                         
                         # Display result
@@ -330,7 +336,9 @@ with tab2:
                             st.balloons()
                         else:
                             st.error(f"❌ Authentication failed. (Score: {auth_score:.2f})")
-                            st.warning("Unusual typing pattern detected. Please try again or use alternative authentication.")
+                            st.warning(
+                                "Unusual typing pattern detected. Please try again or use alternative authentication."
+                            )
                     else:
                         st.error("Not enough data to verify. Please type the complete password.")
                 else:
@@ -343,6 +351,7 @@ with tab2:
                     st.session_state.alt_verify_key_times = {}
             except Exception as e:
                 st.error(f"Verification error: {str(e)}")
+
 
 # Visualization Tab
 with tab3:
@@ -361,20 +370,28 @@ with tab3:
         
         # Create interactive visualizations with plotly
         try:
-            fig = px.scatter(st.session_state.training_data, x="KeyCode", y="TimeDiff", 
-                            title="Keystroke Timing Patterns",
-                            labels={"KeyCode": "Key Code (ASCII)", "TimeDiff": "Time Difference (s)"},
-                            color="TimeDiff", size="TimeDiff")
+            fig = px.scatter(
+                st.session_state.training_data,
+                x="KeyCode",
+                y="TimeDiff",
+                title="Keystroke Timing Patterns",
+                labels={"KeyCode": "Key Code (ASCII)", "TimeDiff": "Time Difference (s)"},
+                color="TimeDiff",
+                size="TimeDiff",
+            )
             st.plotly_chart(fig)
         except Exception as e:
             st.error(f"Error creating scatter plot: {e}")
         
         # Distribution of time differences
         try:
-            fig = px.histogram(st.session_state.training_data, x="TimeDiff", 
-                            title="Distribution of Time Differences Between Keystrokes",
-                            labels={"TimeDiff": "Time Difference (seconds)"},
-                            nbins=20)
+            fig = px.histogram(
+                st.session_state.training_data,
+                x="TimeDiff",
+                title="Distribution of Time Differences Between Keystrokes",
+                labels={"TimeDiff": "Time Difference (seconds)"},
+                nbins=20,
+            )
             st.plotly_chart(fig)
         except Exception as e:
             st.error(f"Error creating histogram: {e}")
