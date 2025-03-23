@@ -168,7 +168,7 @@ with tab1:
                             )
                         except Exception as e:
                             st.error(f"Error during pd.concat: {e}")
-                            return
+                            return  # Important: Exit the function on error
                     
                     # Increment sample count
                     st.session_state.sample_count += 1
@@ -213,7 +213,7 @@ with tab1:
                 # Check if X is empty
                 if X.size == 0:
                     st.error("Training failed: No data available for training.  This usually means no features were extracted.  Check your password and how you are typing it.")
-                    return
+                    return  # Important: Exit the function if no data
                 
                 # Update progress
                 for i in range(50):
@@ -265,7 +265,7 @@ with tab2:
             verify_key_index = len(verify_password) - 1
             
             # Record key press time
-            if verify_key_index >= 0 and verify_key_index not in st.session_state.get("verify_key_times", {}):
+            if verify_key_index >= 0 and key_index not in st.session_state.get("verify_key_times", {}):
                 st.session_state.verify_key_times[verify_key_index] = current_time
         
         # Verify button
@@ -386,3 +386,4 @@ with tab3:
                 st.pyplot(fig)
             except Exception as e:
                 st.error(f"Error creating heatmap: {e}")
+
