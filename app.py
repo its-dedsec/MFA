@@ -7,19 +7,25 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.svm import OneClassSVM
 from datetime import datetime
+import os
 
 # Load or initialize model
 try:
     with open("keystroke_model.pkl", "rb") as f:
         model = pickle.load(f)
+        trained = True
 except FileNotFoundError:
     model = OneClassSVM(kernel='rbf', gamma='auto')
     trained = False
-else:
-    trained = True
 
-keystroke_data = []  # Store samples for training
 keystroke_timings = []  # Store timing data
+DATA_FILE = "keystroke_data.csv"
+
+# Load existing keystroke data
+if os.path.exists(DATA_FILE):
+    keystroke_data = pd.read_csv(DATA_FILE)
+else:
+    keystroke_data = pd.DataFrame(columns=["ASCII Value", "Time Difference"])
 
 # Streamlit UI
 st.set_page_config(page_title="Keystroke Dynamics-Based MFA", layout="wide")
@@ -34,15 +40,22 @@ keystroke_input = st.text_input("Type a sample password")
 if keystroke_input:
     keystroke_timings.append((keystroke_input, datetime.now()))
 
+# Show sample count
+st.sidebar.write(f"Samples collected: {len(keystroke_timings)} / 5")
+
 # Train Model
 if st.button("Train Model"):
     if len(keystroke_timings) < 5:
-        st.error("Need more samples to train")
+        st.error("Need at least 5 samples to train. Keep typing and try again.")
     else:
         df = pd.DataFrame([(ord(char), (t2 - t1).total_seconds()) 
                            for (text, t1), (text2, t2) in zip(keystroke_timings[:-1], keystroke_timings[1:])], 
                           columns=["ASCII Value", "Time Difference"])
-        X = df[["ASCII Value", "Time Difference"]].values
+        
+        keystroke_data = pd.concat([keystroke_data, df], ignore_index=True)
+        keystroke_data.to_csv(DATA_FILE, index=False)
+        
+        X = keystroke_data[["ASCII Value", "Time Difference"]].values
         model.fit(X)
         trained = True
         with open("keystroke_model.pkl", "wb") as f:
@@ -71,13 +84,13 @@ if st.button("Verify User"):
         
         # Visualization - Keystroke Data Heatmap
         fig, ax = plt.subplots()
-        sns.heatmap(df.corr(), annot=True, cmap="coolwarm", ax=ax)
+        sns.heatmap(keystroke_data.corr(), annot=True, cmap="coolwarm", ax=ax)
         ax.set_title("Keystroke Data Correlation Heatmap")
         st.pyplot(fig)
 
         # Visualization - Typing Pattern
         fig, ax = plt.subplots()
-        ax.plot(df["ASCII Value"], df["Time Difference"], marker='o', linestyle='-', label='Typing Pattern')
+        ax.plot(keystroke_data["ASCII Value"], keystroke_data["Time Difference"], marker='o', linestyle='-', label='Typing Pattern')
         ax.set_title("Keystroke Timing Analysis")
         ax.set_xlabel("Keystroke ASCII Value")
         ax.set_ylabel("Time Difference (s)")
