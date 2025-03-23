@@ -32,6 +32,8 @@ if "password_input_main" not in st.session_state:  # Add this
     st.session_state.password_input_main = ""
 if "alt_password_input" not in st.session_state: # Add this
     st.session_state.alt_password_input = ""
+if "verify_password_main" not in st.session_state: # Add this
+    st.session_state.verify_password_main = ""
 
 # Constants
 DATA_FILE = "keystroke_data.csv"
