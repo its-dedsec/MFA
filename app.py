@@ -32,6 +32,8 @@ if "password_input_main" not in st.session_state:  # Add this
     st.session_state.password_input_main = ""
 if "verify_password_main" not in st.session_state: # Add this
     st.session_state.verify_password_main = ""
+if "feedback" not in st.session_state:
+    st.session_state.feedback = ""
 
 # Constants
 DATA_FILE = "keystroke_data.csv"
@@ -101,7 +103,7 @@ with tab1:
         st.session_state.training_data = pd.DataFrame(columns=["KeyCode", "TimeDiff", "Password"])
         st.info("Reference password updated. Please collect new samples.")
     
-    st.write(f"Please type: **{st.session_state.reference_password}**")
+    st.write(f"Please type the password **{st.session_state.reference_password}** in the text box below and then click the 'Submit Sample' button.")
     
     # Create columns for input and buttons
     col1, col2 = st.columns([3, 1])
@@ -140,17 +142,20 @@ with tab1:
                 
                 # Increment sample count
                 st.session_state.sample_count += 1
-                
-                st.success(f"Sample {st.session_state.sample_count} captured successfully!")
+                st.session_state.feedback = f"Sample {st.session_state.sample_count} captured successfully!"
                 
                 # Reset timings for next sample
                 st.session_state.key_press_times = {}
                 # Clear input
                 st.session_state.password_input_main = ""
             else:
-                st.warning("Not enough keystroke data captured. Please type the password again.")
+                st.session_state.feedback = "Not enough keystroke data captured. Please type the password again."
         else:
-            st.warning("Please type the correct reference password")
+             st.session_state.feedback = "Please type the correct reference password"
+             st.warning("Please type the correct reference password")
+    
+    # Display feedback to the user
+    st.text(st.session_state.feedback)
     
     # Display sample progress
     if st.session_state.sample_count > 0:
@@ -201,7 +206,7 @@ with tab2:
     if not st.session_state.trained:
         st.warning("Model not trained yet. Please train the model first.")
     else:
-        st.write(f"Please type: **{st.session_state.reference_password}**")
+        st.write(f"Please type the password **{st.session_state.reference_password}** in the text box below and then click the 'Verify User' button.")
         
         # Create columns for input and verification
         auth_col1, auth_col2 = st.columns([3, 1])
@@ -267,7 +272,7 @@ with tab2:
                         else:
                             st.error(f"❌ Authentication failed. (Score: {auth_score:.2f})")
                             st.warning(
-                                "Unusual typing pattern detected. Please try again or use alternative authentication."
+                                "Unusual typing pattern detected. Please try again."
                             )
                     else:
                         st.error("Not enough data to verify. Please type the complete password.")
